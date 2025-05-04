@@ -36,6 +36,11 @@ const CreatorDashboard = () => {
   const { data: videos = [], isLoading } = useQuery({
     queryKey: ["/api/creator/videos"],
   });
+  
+  // Query to get comments for each video
+  const { data: comments = [] } = useQuery({
+    queryKey: ["/api/creator/comments"],
+  });
 
   const handleDeleteVideo = async (videoId: number) => {
     if (!confirm("Are you sure you want to delete this video?")) {
@@ -203,6 +208,7 @@ const CreatorDashboard = () => {
                     <TableHead>Date</TableHead>
                     <TableHead>Views</TableHead>
                     <TableHead>Likes</TableHead>
+                    <TableHead>Comments</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -244,6 +250,9 @@ const CreatorDashboard = () => {
                         </TableCell>
                         <TableCell className="text-sm text-gray-300">
                           {video.likes.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-300">
+                          {comments.filter((comment: any) => comment.videoId === video.id).length}
                         </TableCell>
                         <TableCell className="text-sm">
                           <span className={`px-2 py-1 text-xs rounded-md ${
