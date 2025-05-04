@@ -2,24 +2,22 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ThumbsUp, Reply } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "@/components/ui/form";
-import { formatTimeAgo } from "@/lib/utils";
-import { Comment } from "@shared/schema";
-import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { queryClient } from "@/lib/queryClient";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { apiRequest } from "@/lib/queryClient";
+import { Comment } from "@shared/schema";
+
+const commentSchema = z.object({
+  content: z.string().min(3, "Comment must be at least 3 characters").max(1000, "Comment too long")
+});
+
+type CommentFormValues = z.infer<typeof commentSchema>;
 
 interface CommentSectionProps {
   videoId: number;
@@ -27,250 +25,135 @@ interface CommentSectionProps {
   isLoading: boolean;
 }
 
-const formSchema = z.object({
-  content: z.string().min(1, "Comment cannot be empty").max(1000, "Comment is too long"),
-});
-
-type FormValues = z.infer<typeof formSchema>;
-
-const CommentSection = ({ videoId, comments, isLoading }: CommentSectionProps) => {
-  const { user } = useAuth();
+export default function CommentSection({ videoId, comments, isLoading }: CommentSectionProps) {
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  
+  const form = useForm<CommentFormValues>({
+    resolver: zodResolver(commentSchema),
     defaultValues: {
-      content: "",
-    },
-  });
-
-  const onSubmit = async (values: FormValues) => {
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please sign in to comment",
-        variant: "destructive",
-      });
-      return;
+      content: ""
     }
-
-    setIsSubmitting(true);
-    try {
-      await apiRequest("POST", `/api/videos/${videoId}/comments`, {
-        content: values.content,
+  });
+  
+  const { mutate: submitComment, isPending } = useMutation({
+    mutationFn: async (data: CommentFormValues) => {
+      return await apiRequest("POST", `/api/videos/${videoId}/comments`, {
+        content: data.content,
+        isAnonymous
       });
-      
-      // Reset form
-      form.reset();
-      
-      // Invalidate comments query to refresh the list
-      queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/comments`] });
-      
+    },
+    onSuccess: () => {
       toast({
         title: "Comment posted",
-        description: "Your comment has been posted anonymously",
+        description: "Your comment has been posted successfully",
       });
-    } catch (error) {
+      form.reset();
+      queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/comments`] });
+    },
+    onError: (error) => {
       toast({
         title: "Error",
         description: "Failed to post comment",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
-  };
-
-  const handleLikeComment = (commentId: number) => {
+  });
+  
+  const onSubmit = (data: CommentFormValues) => {
     if (!user) {
       toast({
         title: "Authentication required",
-        description: "Please sign in to like comments",
-        variant: "destructive",
+        description: "Please log in to post comments",
       });
       return;
     }
-
-    // In a real app, would call API to like comment
-    toast({
-      title: "Comment liked",
-      description: "Your feedback has been recorded",
-    });
+    
+    submitComment(data);
   };
-
-  // Generate random initials for anonymous users
-  const getRandomInitials = (commentId: number) => {
-    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const num = commentId % 100;
-    const letter = letters[commentId % 26];
-    return `${letter}${num}`;
-  };
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="bg-[#1f2937] p-4 mt-4 rounded-lg border border-gray-700">
-        <Skeleton className="h-8 w-40 mb-4 bg-[#111827]" />
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex space-x-3">
-              <Skeleton className="h-8 w-8 rounded-full bg-[#111827]" />
-              <div className="flex-1">
-                <Skeleton className="h-20 w-full bg-[#111827] rounded-lg mb-1" />
-                <Skeleton className="h-4 w-32 bg-[#111827]" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // Group comments by parent-child relationships (for replies)
-  const topLevelComments = comments.filter(comment => !comment.parentId);
-  const replies = comments.filter(comment => comment.parentId);
-
-  const getCommentReplies = (commentId: number) => {
-    return replies.filter(reply => reply.parentId === commentId);
-  };
-
+  
   return (
-    <div className="bg-[#1f2937] p-4 mt-4 rounded-lg border border-gray-700">
-      <h3 className="text-lg font-semibold mb-4">
-        Comments ({comments.length})
+    <div className="mt-8">
+      <h3 className="text-xl font-semibold mb-4 flex items-center">
+        <MessageSquare className="mr-2 h-5 w-5" />
+        Comments {!isLoading && `(${comments.length})`}
       </h3>
       
       {/* Comment form */}
       <div className="mb-6">
-        <div className="flex space-x-3">
-          <Avatar className="h-8 w-8 bg-gray-700">
-            <AvatarFallback>
-              {user ? user.username.slice(0, 2).toUpperCase() : "AN"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)}>
-                <FormField
-                  control={form.control}
-                  name="content"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          rows={2}
-                          placeholder="Add an anonymous comment..."
-                          disabled={isSubmitting || !user}
-                          className="w-full bg-[#111827] border border-gray-700 rounded-md p-2 text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="flex justify-end mt-2">
-                  <Button
-                    type="submit"
-                    className="px-3 py-1.5 bg-primary-600 text-white text-sm rounded-md hover:bg-primary-700"
-                    disabled={isSubmitting || !user}
-                  >
-                    {isSubmitting ? "Posting..." : "Comment"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <Textarea
+            placeholder="Share your thoughts..."
+            className="mb-2 bg-[#1f2937] border-gray-700 text-gray-200"
+            {...form.register("content")}
+          />
+          {form.formState.errors.content && (
+            <p className="text-red-500 text-sm mb-2">{form.formState.errors.content.message}</p>
+          )}
+          <div className="flex items-center justify-between">
+            <label className="flex items-center text-sm text-gray-400">
+              <input
+                type="checkbox"
+                checked={isAnonymous}
+                onChange={() => setIsAnonymous(!isAnonymous)}
+                className="mr-2"
+              />
+              Post anonymously
+            </label>
+            <Button 
+              type="submit" 
+              disabled={isPending || !user}
+              className="bg-code-blue hover:bg-code-blue-dark text-white"
+            >
+              {isPending ? "Posting..." : "Post Comment"}
+            </Button>
           </div>
-        </div>
-        {!user && (
-          <p className="text-center text-sm text-gray-400 mt-2">
-            Please sign in to comment
-          </p>
-        )}
+        </form>
       </div>
       
       {/* Comments list */}
-      <div className="space-y-4">
-        {topLevelComments.length === 0 ? (
-          <p className="text-center text-gray-400 py-4">No comments yet. Be the first to comment!</p>
-        ) : (
-          topLevelComments.map((comment) => (
-            <div key={comment.id}>
-              <div className="flex space-x-3">
-                <Avatar className="h-8 w-8 bg-gray-700">
-                  <AvatarFallback>{getRandomInitials(comment.id)}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <div className="bg-[#111827] rounded-lg p-3">
-                    <p className="text-sm text-gray-300">{comment.content}</p>
-                  </div>
-                  <div className="flex items-center mt-1 text-xs text-gray-500">
-                    <span>{formatTimeAgo(comment.createdAt)}</span>
-                    <button className="ml-3 text-gray-400 hover:text-gray-300">
-                      <Reply className="h-3 w-3 inline mr-1" />
-                      Reply
-                    </button>
-                    <div className="flex items-center ml-3">
-                      <button
-                        className="text-gray-400 hover:text-gray-300 flex items-center"
-                        onClick={() => handleLikeComment(comment.id)}
-                      >
-                        <ThumbsUp className="h-3 w-3 mr-1" />
-                        {comment.likes}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Nested replies */}
-                  {getCommentReplies(comment.id).length > 0 && (
-                    <div className="mt-3 ml-6 space-y-3">
-                      {getCommentReplies(comment.id).map((reply) => (
-                        <div key={reply.id} className="flex space-x-3">
-                          <Avatar className="h-7 w-7 bg-gray-700">
-                            <AvatarFallback>{getRandomInitials(reply.id)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="bg-[#111827] rounded-lg p-3">
-                              <p className="text-sm text-gray-300">{reply.content}</p>
-                            </div>
-                            <div className="flex items-center mt-1 text-xs text-gray-500">
-                              <span>{formatTimeAgo(reply.createdAt)}</span>
-                              <button className="ml-3 text-gray-400 hover:text-gray-300">
-                                Reply
-                              </button>
-                              <div className="flex items-center ml-3">
-                                <button
-                                  className="text-gray-400 hover:text-gray-300 flex items-center"
-                                  onClick={() => handleLikeComment(reply.id)}
-                                >
-                                  <ThumbsUp className="h-3 w-3 mr-1" />
-                                  {reply.likes}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+      {isLoading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex space-x-3">
+              <Skeleton className="h-10 w-10 rounded-full bg-[#1f2937]" />
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-4 w-32 bg-[#1f2937]" />
+                <Skeleton className="h-20 w-full bg-[#1f2937]" />
               </div>
             </div>
-          ))
-        )}
-        
-        {comments.length > 5 && (
-          <Button
-            variant="ghost"
-            className="w-full py-2 text-sm text-primary-500 hover:text-primary-400"
-          >
-            Load more comments
-          </Button>
-        )}
-      </div>
+          ))}
+        </div>
+      ) : comments.length === 0 ? (
+        <div className="text-center py-6 text-gray-400">
+          No comments yet. Be the first to share your thoughts!
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {comments.map((comment: Comment) => (
+            <div key={comment.id} className="flex space-x-3 border-b border-gray-700 pb-4">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="bg-gradient-to-br from-purple-600 to-blue-500 text-white">
+                  {comment.userId ? "U" : "A"}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="flex items-center mb-1">
+                  <p className="font-medium text-gray-200">
+                    {comment.userId ? "User" : "Anonymous"}
+                  </p>
+                  <span className="text-xs text-gray-500 ml-2">
+                    {new Date(comment.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-gray-300 whitespace-pre-line">{comment.content}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-};
-
-export default CommentSection;
+}
