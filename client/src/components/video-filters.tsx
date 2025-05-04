@@ -38,8 +38,8 @@ const VideoFilters = () => {
     
     if (searchTerm) newParams.set('search', searchTerm);
     if (tagParam) newParams.set('tag', tagParam);
-    if (category) newParams.set('category', category);
-    if (difficulty) newParams.set('difficulty', difficulty);
+    if (category && category !== 'all') newParams.set('category', category);
+    if (difficulty && difficulty !== 'all') newParams.set('difficulty', difficulty);
     
     const paramsString = newParams.toString();
     if (paramsString) newUrl += `?${paramsString}`;
