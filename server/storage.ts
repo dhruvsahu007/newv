@@ -472,10 +472,9 @@ export class DatabaseStorage implements IStorage {
       query = query.where(eq(videos.creatorId, options.creatorId));
     }
     
-    // Tag and search filters are more complex and might require specialized query logic
-    // This is a simplification
+    // Tag filter for JSON array
     if (options?.tag) {
-      query = query.where(sql`${videos.tags} @> ${sql.array([options.tag], 'text')}`);
+      query = query.where(sql`${videos.tags}::jsonb @> jsonb_build_array(${options.tag})`);
     }
     
     if (options?.search) {
