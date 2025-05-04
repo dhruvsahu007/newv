@@ -24,13 +24,17 @@ const SearchInput = () => {
       // Preserve other query parameters
       const searchParams = new URLSearchParams(location.split("?")[1] || "");
       searchParams.set("search", debouncedSearchTerm);
-      setLocation(`/?${searchParams.toString()}`);
+      const newLocation = `/?${searchParams.toString()}`;
+      console.log("Updating search URL:", newLocation);
+      setLocation(newLocation);
     } else if (location.includes("search=")) {
       // Remove the search parameter if search is cleared
       const searchParams = new URLSearchParams(location.split("?")[1] || "");
       searchParams.delete("search");
       const newQuery = searchParams.toString();
-      setLocation(newQuery ? `/?${newQuery}` : "/");
+      const newLocation = newQuery ? `/?${newQuery}` : "/";
+      console.log("Clearing search from URL:", newLocation);
+      setLocation(newLocation);
     }
   }, [debouncedSearchTerm, location, setLocation]);
 

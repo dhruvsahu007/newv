@@ -48,6 +48,7 @@ const VideoFilters = () => {
   };
 
   useEffect(() => {
+    console.log("Updating filters:", { category, difficulty });
     updateFilters();
   }, [category, difficulty]);
 

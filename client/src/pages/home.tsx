@@ -50,12 +50,23 @@ const Home = () => {
     if (queryString) {
       queryKey += `?${queryString}`;
     }
-
+    
+    console.log("API request URL:", queryKey);
     return queryKey;
   };
 
+  // Separate filter parameters for React Query caching
+  const queryKey = [
+    '/api/videos',
+    filters.category,
+    filters.difficulty,
+    filters.tag,
+    filters.search
+  ];
+
   const { data: initialVideos, isLoading } = useQuery({
-    queryKey: [buildQueryKey()],
+    queryKey: queryKey,
+    queryFn: () => fetch(buildQueryKey()).then(res => res.json())
   });
 
   const loadMoreVideos = async (page: number) => {

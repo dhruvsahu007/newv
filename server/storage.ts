@@ -224,11 +224,22 @@ export class MemStorage implements IStorage {
     // Filter by search term if specified
     if (options.search) {
       const searchTerm = options.search.toLowerCase();
-      videos = videos.filter(video => 
-        video.title.toLowerCase().includes(searchTerm) || 
-        video.description.toLowerCase().includes(searchTerm) ||
-        video.tags.some(tag => tag.toLowerCase().includes(searchTerm))
-      );
+      console.log("Searching for term:", searchTerm);
+      
+      videos = videos.filter(video => {
+        const titleMatch = video.title.toLowerCase().includes(searchTerm);
+        const descMatch = video.description.toLowerCase().includes(searchTerm);
+        const tagMatch = video.tags.some(tag => tag.toLowerCase().includes(searchTerm));
+        
+        // Log each condition for debugging
+        if (titleMatch) console.log(`Title match found in video ${video.id}: "${video.title}"`);
+        if (descMatch) console.log(`Description match found in video ${video.id}`);
+        if (tagMatch) console.log(`Tag match found in video ${video.id}`);
+        
+        return titleMatch || descMatch || tagMatch;
+      });
+      
+      console.log(`Found ${videos.length} videos matching search term "${searchTerm}"`);
     }
     
     // Sort by latest
@@ -479,12 +490,21 @@ export class DatabaseStorage implements IStorage {
     
     if (options?.search) {
       const searchTerm = `%${options.search}%`;
+      console.log("DB search term:", options.search);
+      
+      // Using SQL OR with ILIKE for case-insensitive matching
       query = query.where(
         or(
           sql`${videos.title} ILIKE ${searchTerm}`,
-          sql`${videos.description} ILIKE ${searchTerm}`
+          sql`${videos.description} ILIKE ${searchTerm}`,
+          // Also search in the tags array by converting to JSON and checking if any tag contains the search term
+          sql`EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(${videos.tags}::jsonb) as tag
+            WHERE tag ILIKE ${searchTerm}
+          )`
         )
       );
+      console.log("Search query created for term:", options.search);
     }
     
     return await query;
