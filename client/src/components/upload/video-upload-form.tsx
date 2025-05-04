@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useParams } from "wouter";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -41,11 +42,22 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-const VideoUploadForm = () => {
+interface VideoUploadFormProps {
+  videoId?: string;
+}
+
+const VideoUploadForm = ({ videoId }: VideoUploadFormProps = {}) => {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentTag, setCurrentTag] = useState("");
+  const isEditMode = !!videoId;
+
+  // Fetch video data if in edit mode
+  const { data: videoData, isLoading: isLoadingVideo } = useQuery({
+    queryKey: [`/api/videos/${videoId}`],
+    enabled: isEditMode,
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -61,6 +73,23 @@ const VideoUploadForm = () => {
       tags: [],
     },
   });
+  
+  // Set form values when video data is loaded
+  useEffect(() => {
+    if (videoData && isEditMode) {
+      form.reset({
+        title: videoData.title,
+        description: videoData.description,
+        embedType: videoData.embedType || "youtube",
+        url: videoData.url,
+        thumbnail: videoData.thumbnail || "",
+        duration: videoData.duration || "",
+        category: videoData.category,
+        difficulty: videoData.difficulty,
+        tags: videoData.tags || [],
+      });
+    }
+  }, [videoData, isEditMode, form]);
 
   const tags = form.watch("tags");
   const embedType = form.watch("embedType");
@@ -114,19 +143,33 @@ const VideoUploadForm = () => {
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
-      await apiRequest("POST", "/api/videos", values);
-      
-      toast({
-        title: "Video uploaded",
-        description: "Your video has been uploaded successfully!",
-      });
+      if (isEditMode && videoId) {
+        // Update existing video
+        await apiRequest("PATCH", `/api/videos/${videoId}`, values);
+        
+        // Update the list of videos in the cache
+        queryClient.invalidateQueries({ queryKey: ['/api/creator/videos'] });
+        
+        toast({
+          title: "Video updated",
+          description: "Your video has been updated successfully!",
+        });
+      } else {
+        // Create new video
+        await apiRequest("POST", "/api/videos", values);
+        
+        toast({
+          title: "Video uploaded",
+          description: "Your video has been uploaded successfully!",
+        });
+      }
       
       // Redirect to dashboard
       setLocation("/creator/dashboard");
     } catch (error) {
-      console.error("Upload error:", error);
+      console.error("Form error:", error);
       toast({
-        title: "Upload failed",
+        title: isEditMode ? "Update failed" : "Upload failed",
         description: error instanceof Error ? error.message : "Please check your submission and try again.",
         variant: "destructive",
       });
@@ -403,9 +446,12 @@ const VideoUploadForm = () => {
           <Button
             type="submit"
             className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isLoadingVideo}
           >
-            {isSubmitting ? "Uploading..." : "Upload Video"}
+            {isSubmitting 
+              ? (isEditMode ? "Saving..." : "Uploading...") 
+              : (isEditMode ? "Save Changes" : "Upload Video")
+            }
           </Button>
         </div>
       </form>

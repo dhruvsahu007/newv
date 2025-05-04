@@ -72,6 +72,9 @@ function Router() {
       <Route path="/creator/upload">
         <ProtectedRoute component={CreatorUpload} requiredRoles={["creator", "admin"]} />
       </Route>
+      <Route path="/creator/edit/:id">
+        <ProtectedRoute component={CreatorUpload} requiredRoles={["creator", "admin"]} />
+      </Route>
       
       {/* Admin Routes */}
       <Route path="/admin/dashboard">
