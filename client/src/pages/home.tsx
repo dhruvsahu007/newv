@@ -21,12 +21,19 @@ const Home = () => {
   // Parse query params from URL
   useEffect(() => {
     const searchParams = new URLSearchParams(location.split("?")[1] || "");
-    setFilters({
+    const newFilters = {
       category: searchParams.get("category") || "",
       difficulty: searchParams.get("difficulty") || "",
       tag: searchParams.get("tag") || "",
       search: searchParams.get("search") || "",
-    });
+    };
+    
+    setFilters(newFilters);
+    
+    // Log the search parameters for debugging
+    if (newFilters.search) {
+      console.log("Search term detected:", newFilters.search);
+    }
   }, [location]);
 
   // Build the queryKey with filters
