@@ -1,7 +1,10 @@
 import { 
   User, InsertUser, Video, InsertVideo, Comment, InsertComment, 
-  WatchHistory, InsertWatchHistory, WatchLater, InsertWatchLater 
+  WatchHistory, InsertWatchHistory, WatchLater, InsertWatchLater,
+  users, videos, comments, watchHistory, watchLater
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and, or, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -405,4 +408,248 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Create DatabaseStorage class
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+  
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+  
+  async getVideos(options?: { 
+    limit?: number, 
+    offset?: number, 
+    category?: string, 
+    difficulty?: string, 
+    tag?: string, 
+    search?: string,
+    status?: string,
+    creatorId?: number
+  }): Promise<Video[]> {
+    let query = db
+      .select()
+      .from(videos)
+      .orderBy(desc(videos.createdAt));
+    
+    if (options?.limit) {
+      query = query.limit(options.limit);
+    }
+    
+    if (options?.offset) {
+      query = query.offset(options.offset);
+    }
+    
+    if (options?.category) {
+      query = query.where(eq(videos.category, options.category));
+    }
+    
+    if (options?.difficulty) {
+      query = query.where(eq(videos.difficulty, options.difficulty));
+    }
+    
+    if (options?.status) {
+      query = query.where(eq(videos.status, options.status));
+    }
+    
+    if (options?.creatorId) {
+      query = query.where(eq(videos.creatorId, options.creatorId));
+    }
+    
+    // Tag and search filters are more complex and might require specialized query logic
+    // This is a simplification
+    if (options?.tag) {
+      query = query.where(sql`${videos.tags} @> ${sql.array([options.tag], 'text')}`);
+    }
+    
+    if (options?.search) {
+      const searchTerm = `%${options.search}%`;
+      query = query.where(
+        or(
+          sql`${videos.title} ILIKE ${searchTerm}`,
+          sql`${videos.description} ILIKE ${searchTerm}`
+        )
+      );
+    }
+    
+    return await query;
+  }
+  
+  async getVideo(id: number): Promise<Video | undefined> {
+    const [video] = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, id));
+    
+    return video || undefined;
+  }
+  
+  async createVideo(insertVideo: InsertVideo): Promise<Video> {
+    const [video] = await db
+      .insert(videos)
+      .values(insertVideo)
+      .returning();
+    
+    return video;
+  }
+  
+  async updateVideo(id: number, updates: Partial<Video>): Promise<Video | undefined> {
+    const [updatedVideo] = await db
+      .update(videos)
+      .set(updates)
+      .where(eq(videos.id, id))
+      .returning();
+    
+    return updatedVideo;
+  }
+  
+  async deleteVideo(id: number): Promise<boolean> {
+    const result = await db
+      .delete(videos)
+      .where(eq(videos.id, id));
+    
+    return result.count > 0;
+  }
+  
+  async getComments(videoId: number): Promise<Comment[]> {
+    return await db
+      .select()
+      .from(comments)
+      .where(eq(comments.videoId, videoId))
+      .orderBy(desc(comments.createdAt));
+  }
+  
+  async createComment(insertComment: InsertComment): Promise<Comment> {
+    const [comment] = await db
+      .insert(comments)
+      .values(insertComment)
+      .returning();
+    
+    return comment;
+  }
+  
+  async updateCommentStatus(id: number, status: string): Promise<boolean> {
+    const result = await db
+      .update(comments)
+      .set({ status })
+      .where(eq(comments.id, id));
+    
+    return result.count > 0;
+  }
+  
+  async getWatchHistory(userId: number): Promise<WatchHistory[]> {
+    return await db
+      .select()
+      .from(watchHistory)
+      .where(eq(watchHistory.userId, userId))
+      .orderBy(desc(watchHistory.updatedAt));
+  }
+  
+  async addToWatchHistory(insertHistory: InsertWatchHistory): Promise<WatchHistory> {
+    // Check if entry already exists
+    const [existingEntry] = await db
+      .select()
+      .from(watchHistory)
+      .where(
+        and(
+          eq(watchHistory.userId, insertHistory.userId),
+          eq(watchHistory.videoId, insertHistory.videoId)
+        )
+      );
+    
+    if (existingEntry) {
+      // Update the existing entry
+      const [updated] = await db
+        .update(watchHistory)
+        .set({ 
+          updatedAt: new Date(),
+          watchTime: insertHistory.watchTime,
+          completed: insertHistory.completed 
+        })
+        .where(eq(watchHistory.id, existingEntry.id))
+        .returning();
+      
+      return updated;
+    } else {
+      // Create a new entry
+      const [history] = await db
+        .insert(watchHistory)
+        .values(insertHistory)
+        .returning();
+      
+      return history;
+    }
+  }
+  
+  async getWatchLater(userId: number): Promise<WatchLater[]> {
+    return await db
+      .select()
+      .from(watchLater)
+      .where(eq(watchLater.userId, userId))
+      .orderBy(desc(watchLater.createdAt));
+  }
+  
+  async addToWatchLater(insertWatchLater: InsertWatchLater): Promise<WatchLater> {
+    const [watchLaterEntry] = await db
+      .insert(watchLater)
+      .values(insertWatchLater)
+      .returning();
+    
+    return watchLaterEntry;
+  }
+  
+  async removeFromWatchLater(userId: number, videoId: number): Promise<boolean> {
+    const result = await db
+      .delete(watchLater)
+      .where(
+        and(
+          eq(watchLater.userId, userId),
+          eq(watchLater.videoId, videoId)
+        )
+      );
+    
+    return result.count > 0;
+  }
+  
+  async incrementViews(videoId: number): Promise<boolean> {
+    const result = await db
+      .update(videos)
+      .set({
+        views: sql`${videos.views} + 1`
+      })
+      .where(eq(videos.id, videoId));
+    
+    return result.count > 0;
+  }
+  
+  async toggleLike(videoId: number, isLike: boolean): Promise<Video | undefined> {
+    const result = await db
+      .update(videos)
+      .set({
+        likes: sql`${videos.likes} + ${isLike ? 1 : -1}`
+      })
+      .where(eq(videos.id, videoId))
+      .returning();
+    
+    return result[0];
+  }
+}
+
+// Use DatabaseStorage instead of MemStorage
+export const storage = new DatabaseStorage();
