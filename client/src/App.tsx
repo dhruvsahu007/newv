@@ -14,6 +14,7 @@ import Home from "@/pages/home";
 import VideoPage from "@/pages/video";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
+import WatchLater from "@/pages/watch-later";
 import CreatorDashboard from "@/pages/creator/dashboard";
 import CreatorUpload from "@/pages/creator/upload";
 import AdminDashboard from "@/pages/admin/dashboard";
@@ -62,6 +63,7 @@ function Router() {
       <Route path="/video/:id" component={VideoPage} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/watch-later" component={WatchLater} />
       
       {/* Creator Routes */}
       <Route path="/creator/dashboard">
