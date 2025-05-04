@@ -65,6 +65,18 @@ const Header = () => {
                         My Library
                       </a>
                     </Link>
+                    
+                    <Link href="/watch-history">
+                      <a
+                        className={`px-3 py-2 rounded-md text-sm font-medium ${
+                          location === "/watch-history"
+                            ? "text-white bg-[#1f2937]"
+                            : "text-gray-300 hover:bg-[#1f2937] hover:text-white"
+                        }`}
+                      >
+                        Watch History
+                      </a>
+                    </Link>
 
                     {(user.role === "creator" || user.role === "admin") && (
                       <Link href="/creator/dashboard">
@@ -212,6 +224,19 @@ const Header = () => {
                     onClick={closeMobileMenu}
                   >
                     My Library
+                  </a>
+                </Link>
+                
+                <Link href="/watch-history">
+                  <a
+                    className={`block px-3 py-2 rounded-md text-base font-medium ${
+                      location === "/watch-history"
+                        ? "text-white bg-gray-800"
+                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                    }`}
+                    onClick={closeMobileMenu}
+                  >
+                    Watch History
                   </a>
                 </Link>
 
