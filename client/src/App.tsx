@@ -15,6 +15,7 @@ import VideoPage from "@/pages/video";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import WatchLater from "@/pages/watch-later";
+import WatchHistory from "@/pages/watch-history";
 import CreatorDashboard from "@/pages/creator/dashboard";
 import CreatorUpload from "@/pages/creator/upload";
 import AdminDashboard from "@/pages/admin/dashboard";
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/watch-later" component={WatchLater} />
+      <Route path="/watch-history" component={WatchHistory} />
       
       {/* Creator Routes */}
       <Route path="/creator/dashboard">
